@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Dart Checkout & Safety Coach</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-4 flex flex-col items-center justify-start">
+
+    <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
+        <h1 class="text-2xl font-black text-center mb-1 text-emerald-400">🎯 Smart Dart Coach</h1>
+        <p class="text-xs text-center text-slate-400 mb-6">Taktischer Notfall- & Nachbar-Plan</p>
+
+        <!-- Modus-Auswahl -->
+        <div class="mb-4">
+            <label class="block text-sm font-semibold mb-2 text-slate-300">Spiel-Modus:</label>
+            <div class="grid grid-cols-3 gap-2">
+                <button onclick="setMode('double')" id="modeDouble" class="py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-xs transition">Double Out</button>
+                <button onclick="setMode('master')" id="modeMaster" class="py-2 rounded-lg bg-emerald-600 font-bold text-xs text-white transition">Master Out</button>
+                <button onclick="setMode('single')" id="modeSingle" class="py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-xs transition">Single Out</button>
+            </div>
+        </div>
+
+        <!-- Rest-Eingabe -->
+        <div class="mb-4">
+            <label class="block text-sm font-semibold mb-2 text-slate-300">Aktueller Rest:</label>
+            <div class="flex gap-2">
+                <input type="number" id="scoreInput" value="76" min="2" max="170" oninput="calculateCheckout()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-2xl font-bold text-center text-white focus:outline-none focus:border-emerald-500">
+                <button onclick="calculateCheckout()" class="bg-emerald-600 hover:bg-emerald-500 font-bold px-6 rounded-xl transition text-white">OK</button>
+            </div>
+        </div>
+
+        <!-- Darts in Hand -->
+        <div class="mb-6">
+            <label class="block text-sm font-semibold mb-2 text-slate-300">Darts in der Hand:</label>
+            <div class="flex gap-2 justify-center" id="dartsCountBtns">
+                <button onclick="setDarts(3)" id="btnD3" class="flex-1 py-2 rounded-lg bg-emerald-600 font-bold text-sm text-white">3 Darts</button>
+                <button onclick="setDarts(2)" id="btnD2" class="flex-1 py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-sm">2 Darts</button>
+                <button onclick="setDarts(1)" id="btnD1" class="flex-1 py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-sm">1 Dart</button>
+            </div>
+        </div>
+
+        <!-- Ergebnisse / Notfall-Plan -->
+        <div id="outputArea" class="space-y-4 mb-6">
+            <!-- Dynamischer Inhalt -->
+        </div>
+
+        <!-- Live-Korrektur nach Wurf -->
+        <div class="border-t border-slate-800 pt-4">
+            <h3 class="text-sm font-semibold mb-2 text-slate-300">Was hast du wirklich getroffen? (Live-Update)</h3>
+            <div class="flex gap-2">
+                <input type="number" id="hitInput" placeholder="Zahl eingeben (z.B. 19, 7, 3)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+                <button onclick="applyCustomHit()" class="bg-slate-700 hover:bg-slate-600 font-bold px-4 rounded-xl text-xs transition text-white">Abziehen</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentDarts = 3;
+        let gameMode = 'master';
+
+        function setDarts(num) {
+            currentDarts = num;
+            document.getElementById('btnD3').className = num === 3 ? "flex-1 py-2 rounded-lg bg-emerald-600 font-bold text-sm text-white" : "flex-1 py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-sm";
+            document.getElementById('btnD2').className = num === 2 ? "flex-1 py-2 rounded-lg bg-emerald-600 font-bold text-sm text-white" : "flex-1 py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-sm";
+            document.getElementById('btnD1').className = num === 1 ? "flex-1 py-2 rounded-lg bg-emerald-600 font-bold text-sm text-white" : "flex-1 py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-sm";
+            calculateCheckout();
+        }
+
+        function setMode(mode) {
+            gameMode = mode;
+            document.getElementById('modeDouble').className = mode === 'double' ? "py-2 rounded-lg bg-emerald-600 font-bold text-xs text-white transition" : "py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-xs transition";
+            document.getElementById('modeMaster').className = mode === 'master' ? "py-2 rounded-lg bg-emerald-600 font-bold text-xs text-white transition" : "py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-xs transition";
+            document.getElementById('modeSingle').className = mode === 'single' ? "py-2 rounded-lg bg-emerald-600 font-bold text-xs text-white transition" : "py-2 rounded-lg bg-slate-800 text-slate-400 font-bold text-xs transition";
+            calculateCheckout();
+        }
+
+        function calculateCheckout() {
+            const scoreInput = document.getElementById('scoreInput');
+            const score = parseInt(scoreInput.value);
+            const output = document.getElementById('outputArea');
+            
+            if (isNaN(score) || score < 2 || score > 170) {
+                output.innerHTML = `<div class="bg-red-950/50 border border-red-900 rounded-xl p-4 text-center text-red-300 text-sm">Bitte gib einen gültigen Rest ein.</div>`;
+                return;
+            }
+
+            let primaryRec = "";
+            let safetyHTML = "";
+
+            if (gameMode === 'master' && score === 76) {
+                primaryRec = `🎯 Hauptziel: Auf die 19 zielen (Triple 19)`;
+                safetyHTML = `
+                    <div class="mt-2 pt-2 border-t border-slate-700/50 text-xs space-y-1.5">
+                        <div class="text-emerald-400 font-semibold mb-1">Der Taktik- & Notfall-Plan (Nachbar-Check):</div>
+                        <div>👉 <strong>Exakter Treffer (T19):</strong> Rest 19 (perfekt im Master Out über S19 / D-Setup zu beenden).</div>
+                        <div>👉 <strong>Fehlwurf ins Single (S19):</strong> Rest exakt <strong>57</strong>. Du hast noch 2 Darts und kannst sofort über <strong>Triple 19 (57)</strong> ausmachen!</div>
+                        <div>👉 <strong>Abrutscher in die 7:</strong> Rest 69 (Nächster Pfeil auf T19 / Bull).</div>
+                        <div>👉 <strong>Abrutscher in die 3:</strong> Rest 73 (Nächster Pfeil über S13 / T20).</div>
+                    </div>
+                `;
+            } else {
+                let pref = (score % 2 !== 0 || score === 76) ? 19 : 20;
+                primaryRec = `🎯 Taktischer Hauptweg: Über ${pref}er-Segment`;
+                safetyHTML = `
+                    <div class="mt-2 pt-2 border-t border-slate-700/50 text-xs space-y-1.5">
+                        <div class="text-emerald-400 font-semibold mb-1">Notfall-Plan bei Fehlwurf:</div>
+                        <div>👉 Single-Treffer lässt ${score - pref} Rest.</div>
+                        <div>👉 Nachbarn auf dem Board fangen den Dart kontrolliert auf.</div>
+                    </div>
+                `;
+            }
+
+            output.innerHTML = `
+                <div class="bg-slate-800/80 border border-emerald-500/30 rounded-xl p-4">
+                    <div class="text-xs text-emerald-400 font-bold uppercase mb-1">Modus: ${gameMode.toUpperCase()} | Rest: ${score} (${currentDarts} Darts):</div>
+                    <div class="text-base font-bold mb-2 text-white">${primaryRec}</div>
+                    ${safetyHTML}
+                </div>
+            `;
+        }
+
+        function applyCustomHit() {
+            const scoreInput = document.getElementById('scoreInput');
+            const hitInput = document.getElementById('hitInput');
+            let currentScore = parseInt(scoreInput.value);
+            let hitValue = parseInt(hitInput.value);
+
+            if (isNaN(hitValue) || hitValue < 0) {
+                alert("Bitte gültigen Wert eingeben.");
+                return;
+            }
+
+            currentScore -= hitValue;
+            scoreInput.value = currentScore;
+            hitInput.value = "";
+            calculateCheckout();
+        }
+
+        window.onload = function() {
+            setMode('master');
+            setDarts(3);
+            calculateCheckout();
+        };
+    </script>
+</body>
+</html>
+
